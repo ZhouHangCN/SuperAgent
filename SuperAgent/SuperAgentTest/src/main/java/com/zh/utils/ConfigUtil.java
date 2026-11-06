@@ -8,6 +8,10 @@ import java.util.List;
 
 public class ConfigUtil {
     private static final Logger logger = Logger.getLogger(ConfigUtil.class);
+    //已删除IP分区说明，便于直接打开配置文件时区分
+    private static final String REMOVED_SECTION_HEADER = "# 已删除的IP（注释状态，取消注释即可重新启用）";
+    //正在使用的IP分区说明
+    private static final String IN_USE_SECTION_HEADER = "# 正在使用的IP（非注释状态）";
 
     public static String getPathname() {
 //        String FilePath = SystemInfoUtil.getUserDir();
@@ -95,6 +99,11 @@ public class ConfigUtil {
                 continue;
             }
             if (oldIPInfo.startsWith("#")) {
+                if (oldIPInfo.equals(REMOVED_SECTION_HEADER)
+                        || oldIPInfo.equals(IN_USE_SECTION_HEADER)) {
+                    //分区说明在保存时重新生成，避免重复保留
+                    continue;
+                }
                 String commentContent = oldIPInfo.substring(1).trim();
                 if (InterfaceUtil.isIPInfo(commentContent)) {
                     //之前保存时注释掉的已删除记录，继续保留在最前面
@@ -115,17 +124,31 @@ public class ConfigUtil {
             }
         }
         StringBuilder sb = new StringBuilder();
-        //被删去的白名单记录以注释形式放在整个列表最前面
-        for (String removedIPInfo : removedIPList) {
-            sb.append(removedIPInfo).append("\n");
+        //被删去的白名单记录以注释形式放在整个列表最前面，并用注释说明该分区
+        if (!removedIPList.isEmpty()) {
+            sb.append(REMOVED_SECTION_HEADER).append("\n");
+            for (String removedIPInfo : removedIPList) {
+                sb.append(removedIPInfo).append("\n");
+            }
         }
-        //按输入框中的顺序写入白名单
-        for (String newIPInfo : newIPList) {
-            sb.append(newIPInfo).append("\n");
+        //正在使用的白名单条目按输入框中的顺序写入，并用注释说明该分区
+        if (!newIPList.isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            sb.append(IN_USE_SECTION_HEADER).append("\n");
+            for (String newIPInfo : newIPList) {
+                sb.append(newIPInfo).append("\n");
+            }
         }
         //保留原有的手动注释
-        for (String oldLine : keptOldLines) {
-            sb.append(oldLine).append("\n");
+        if (!keptOldLines.isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            for (String oldLine : keptOldLines) {
+                sb.append(oldLine).append("\n");
+            }
         }
         //创建字符输出流
         Writer fw = null;
