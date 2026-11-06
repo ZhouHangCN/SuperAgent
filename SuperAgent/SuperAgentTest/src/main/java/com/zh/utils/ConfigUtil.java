@@ -3,7 +3,7 @@ package com.zh.utils;
 import org.apache.log4j.Logger;
 
 import java.io.*;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ConfigUtil {
@@ -44,16 +44,32 @@ public class ConfigUtil {
     }
 
     public static String writeWhiteList(String str) {
-        //本地文件中的配置列表
-        List<String> oldIPList = null;
+        //输入框中的白名单，保持输入顺序
+        List<String> newIPList = new ArrayList<>();
+        if (str != null) {
+            for (String line : str.split("\n")) {
+                String newIPInfo = line.trim();
+                if (InterfaceUtil.isIPInfo(newIPInfo)) {
+                    newIPList.add(newIPInfo);
+                }
+            }
+        }
+        //本地文件中原有的行，用于保留注释和被移除的白名单记录
+        List<String> oldLines = new ArrayList<>();
         File file = new File(getPathname());
         if (file.exists()) {
-            oldIPList = Arrays.asList(readWhiteList().split("\n"));
+            try (FileReader reader = new FileReader(file);
+                 BufferedReader br = new BufferedReader(reader)
+            ) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    oldLines.add(line);
+                }
+            } catch (Exception e) {
+                logger.error("读取白名单配置失败", e);
+                return "error";
+            }
         }
-        //List<String> oldIPList = new ArrayList(oldList);
-        //临时写入的配置列表
-        List<String> newIPList = Arrays.asList(str.split("\n"));
-        //List<String> newIPList = new ArrayList(newList);
 
         File whiteListFile = new File(getPathname());
         File fileParent = whiteListFile.getParentFile();
@@ -69,28 +85,25 @@ public class ConfigUtil {
                 logger.error("创建白名单配置文件失败", e);
             }
         }
-        //替换已经删除的ip信息
         StringBuilder sb = new StringBuilder();
-        try (FileReader reader = new FileReader(getPathname());
-             BufferedReader br = new BufferedReader(reader)
-        ) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                // 一次读入一行数据
-                if (!newIPList.contains(line) && InterfaceUtil.isIPInfo(line)) {
-                    sb.append("#").append(line.trim()).append("\n");
-                } else {
-                    sb.append(line.trim()).append("\n");
-                }
-            }
-        } catch (Exception e) {
-            logger.error("读取白名单配置失败", e);
-            return "error";
-        }
-        //添加原本没有的ip信息
+        //按输入框中的顺序写入白名单
         for (String newIPInfo : newIPList) {
-            if ((null == oldIPList || !oldIPList.contains(newIPInfo)) && InterfaceUtil.isIPInfo(newIPInfo)) {
-                sb.append(newIPInfo).append("\n");
+            sb.append(newIPInfo).append("\n");
+        }
+        //保留原有注释，并把已删除的白名单记录注释后保留在末尾
+        for (String oldLine : oldLines) {
+            String oldIPInfo = oldLine.trim();
+            if (oldIPInfo.length() == 0) {
+                continue;
+            }
+            if (oldIPInfo.startsWith("#")) {
+                sb.append(oldIPInfo).append("\n");
+            } else if (InterfaceUtil.isIPInfo(oldIPInfo)) {
+                if (!newIPList.contains(oldIPInfo)) {
+                    sb.append("#").append(oldIPInfo).append("\n");
+                }
+            } else {
+                sb.append(oldIPInfo).append("\n");
             }
         }
         //创建字符输出流
