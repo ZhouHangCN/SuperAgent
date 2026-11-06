@@ -85,26 +85,47 @@ public class ConfigUtil {
                 logger.error("创建白名单配置文件失败", e);
             }
         }
-        StringBuilder sb = new StringBuilder();
-        //按输入框中的顺序写入白名单
-        for (String newIPInfo : newIPList) {
-            sb.append(newIPInfo).append("\n");
-        }
-        //保留原有注释，并把已删除的白名单记录注释后保留在末尾
+        //已删除的白名单记录，统一以注释形式放在文件最前面
+        List<String> removedIPList = new ArrayList<>();
+        //其它需要保留的旧行，例如手动添加的注释
+        List<String> keptOldLines = new ArrayList<>();
         for (String oldLine : oldLines) {
             String oldIPInfo = oldLine.trim();
             if (oldIPInfo.length() == 0) {
                 continue;
             }
             if (oldIPInfo.startsWith("#")) {
-                sb.append(oldIPInfo).append("\n");
+                String commentContent = oldIPInfo.substring(1).trim();
+                if (InterfaceUtil.isIPInfo(commentContent)) {
+                    //之前保存时注释掉的已删除记录，继续保留在最前面
+                    String removedIPInfo = "#" + commentContent;
+                    if (!removedIPList.contains(removedIPInfo)) {
+                        removedIPList.add(removedIPInfo);
+                    }
+                } else {
+                    keptOldLines.add(oldIPInfo);
+                }
             } else if (InterfaceUtil.isIPInfo(oldIPInfo)) {
-                if (!newIPList.contains(oldIPInfo)) {
-                    sb.append("#").append(oldIPInfo).append("\n");
+                if (!newIPList.contains(oldIPInfo)
+                        && !removedIPList.contains("#" + oldIPInfo)) {
+                    removedIPList.add("#" + oldIPInfo);
                 }
             } else {
-                sb.append(oldIPInfo).append("\n");
+                keptOldLines.add(oldIPInfo);
             }
+        }
+        StringBuilder sb = new StringBuilder();
+        //被删去的白名单记录以注释形式放在整个列表最前面
+        for (String removedIPInfo : removedIPList) {
+            sb.append(removedIPInfo).append("\n");
+        }
+        //按输入框中的顺序写入白名单
+        for (String newIPInfo : newIPList) {
+            sb.append(newIPInfo).append("\n");
+        }
+        //保留原有的手动注释
+        for (String oldLine : keptOldLines) {
+            sb.append(oldLine).append("\n");
         }
         //创建字符输出流
         Writer fw = null;
