@@ -8,6 +8,10 @@ import java.util.List;
 
 public class ConfigUtil {
     private static final Logger logger = Logger.getLogger(ConfigUtil.class);
+    //已删除IP分区说明，便于直接打开配置文件时区分
+    private static final String REMOVED_SECTION_HEADER = "# 已删除的IP（注释状态，取消注释即可重新启用）";
+    //正在使用的IP分区说明
+    private static final String IN_USE_SECTION_HEADER = "# 正在使用的IP（非注释状态）";
 
     public static String getPathname() {
 //        String FilePath = SystemInfoUtil.getUserDir();
@@ -85,25 +89,65 @@ public class ConfigUtil {
                 logger.error("创建白名单配置文件失败", e);
             }
         }
-        StringBuilder sb = new StringBuilder();
-        //按输入框中的顺序写入白名单
-        for (String newIPInfo : newIPList) {
-            sb.append(newIPInfo).append("\n");
-        }
-        //保留原有注释，并把已删除的白名单记录注释后保留在末尾
+        //已删除的白名单记录，统一以注释形式放在文件最前面
+        List<String> removedIPList = new ArrayList<>();
+        //其它需要保留的旧行，例如手动添加的注释
+        List<String> keptOldLines = new ArrayList<>();
         for (String oldLine : oldLines) {
             String oldIPInfo = oldLine.trim();
             if (oldIPInfo.length() == 0) {
                 continue;
             }
             if (oldIPInfo.startsWith("#")) {
-                sb.append(oldIPInfo).append("\n");
+                if (oldIPInfo.equals(REMOVED_SECTION_HEADER)
+                        || oldIPInfo.equals(IN_USE_SECTION_HEADER)) {
+                    //分区说明在保存时重新生成，避免重复保留
+                    continue;
+                }
+                String commentContent = oldIPInfo.substring(1).trim();
+                if (InterfaceUtil.isIPInfo(commentContent)) {
+                    //之前保存时注释掉的已删除记录，继续保留在最前面
+                    String removedIPInfo = "#" + commentContent;
+                    if (!removedIPList.contains(removedIPInfo)) {
+                        removedIPList.add(removedIPInfo);
+                    }
+                } else {
+                    keptOldLines.add(oldIPInfo);
+                }
             } else if (InterfaceUtil.isIPInfo(oldIPInfo)) {
-                if (!newIPList.contains(oldIPInfo)) {
-                    sb.append("#").append(oldIPInfo).append("\n");
+                if (!newIPList.contains(oldIPInfo)
+                        && !removedIPList.contains("#" + oldIPInfo)) {
+                    removedIPList.add("#" + oldIPInfo);
                 }
             } else {
-                sb.append(oldIPInfo).append("\n");
+                keptOldLines.add(oldIPInfo);
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        //被删去的白名单记录以注释形式放在整个列表最前面，并用注释说明该分区
+        if (!removedIPList.isEmpty()) {
+            sb.append(REMOVED_SECTION_HEADER).append("\n");
+            for (String removedIPInfo : removedIPList) {
+                sb.append(removedIPInfo).append("\n");
+            }
+        }
+        //正在使用的白名单条目按输入框中的顺序写入，并用注释说明该分区
+        if (!newIPList.isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            sb.append(IN_USE_SECTION_HEADER).append("\n");
+            for (String newIPInfo : newIPList) {
+                sb.append(newIPInfo).append("\n");
+            }
+        }
+        //保留原有的手动注释
+        if (!keptOldLines.isEmpty()) {
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            for (String oldLine : keptOldLines) {
+                sb.append(oldLine).append("\n");
             }
         }
         //创建字符输出流
