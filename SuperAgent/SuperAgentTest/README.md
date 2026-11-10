@@ -99,3 +99,9 @@
 ### 反馈
 
 如遇到其他BUG或问题，欢迎将问题描述和软件工具下存放路径下的info.log邮箱至zhouh1105@163.com进行反馈。
+
+### License
+
+本项目采用 MIT 许可证，许可证全文见 [LICENSE](../../LICENSE)。
+
+Copyright (c) 2026 ZhouHang
