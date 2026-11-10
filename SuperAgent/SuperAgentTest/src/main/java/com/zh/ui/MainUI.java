@@ -384,7 +384,7 @@ public class MainUI extends JFrame {
 
         //设置窗体属性
         //设置界面标题
-        this.setTitle("Network Route Tool v1.5 by 周航");
+        this.setTitle("Network Route Tool v1.6 by 周航");
         //设置界面像素
         this.setSize(700, 250);
         //窗口居中
