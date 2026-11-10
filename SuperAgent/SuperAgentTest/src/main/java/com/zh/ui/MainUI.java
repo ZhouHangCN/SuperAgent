@@ -10,6 +10,8 @@ import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import javax.swing.plaf.basic.BasicComboBoxRenderer;
 import java.awt.*;
 import java.awt.event.*;
@@ -42,6 +44,8 @@ public class MainUI extends JFrame {
     String insideGateway, outsideGateway, insideNetmask, insideNetSegment;
     //是否查询到网络接口
     boolean flag = false;
+    //界面初始化完成后才响应窗口重新获得焦点时的自动刷新
+    boolean initialized = false;
     List<Interface> interfaceList;
     String[] inside;
     String[] outside;
@@ -52,18 +56,9 @@ public class MainUI extends JFrame {
         ItemListener insideListener = arg0 -> {
             if (flag) {
                 if (ItemEvent.SELECTED == arg0.getStateChange()) {
-                    String selectedItem = arg0.getItem().toString();
-                    insideIndex = InterfaceUtil.getIndex(selectedItem);
-                    for (Interface anInterface : interfaceList) {
-                        if (anInterface.getIndex() == insideIndex)
-                            insideGateway = anInterface.getGateway();
-                    }
-                    int selectIndex = InterfaceUtil.getIndex(selectedItem);
-                    for (Interface inf : interfaceList) {
-                        if (inf.getIndex() == selectIndex) {
-                            insideNetmask = inf.getNetmask();
-                            insideNetSegment = InterfaceUtil.getNetSegment(inf.getIp(), insideNetmask);
-                        }
+                    int selectIndex = comboBoxInside.getSelectedIndex();
+                    if (selectIndex >= 0 && selectIndex < interfaceList.size()) {
+                        applyInsideSelection(interfaceList.get(selectIndex));
                     }
                 }
             }
@@ -71,11 +66,9 @@ public class MainUI extends JFrame {
         ItemListener outsideListener = arg1 -> {
             if (flag) {
                 if (ItemEvent.SELECTED == arg1.getStateChange()) {
-                    String selectedItem = arg1.getItem().toString();
-                    outsideIndex = InterfaceUtil.getIndex(selectedItem);
-                    for (Interface anInterface : interfaceList) {
-                        if (anInterface.getIndex() == outsideIndex)
-                            outsideGateway = anInterface.getGateway();
+                    int selectIndex = comboBoxOutside.getSelectedIndex();
+                    if (selectIndex >= 0 && selectIndex < interfaceList.size()) {
+                        applyOutsideSelection(interfaceList.get(selectIndex));
                     }
                 }
             }
@@ -167,7 +160,7 @@ public class MainUI extends JFrame {
             }
         };
 
-        ActionListener renewActionListener = arg4 -> init();
+        ActionListener renewActionListener = arg4 -> renew();
 
         ActionListener aboutActionListener = arg5 -> {
             Desktop desktop = Desktop.getDesktop();
@@ -292,6 +285,26 @@ public class MainUI extends JFrame {
         comboBoxInside.addItemListener(insideListener);
         comboBoxOutside.addItemListener(outsideListener);
 
+        //打开下拉框时重新读取网卡信息，避免网卡或 IP 变化后仍显示旧数据
+        PopupMenuListener interfaceRefreshListener = new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+                if (initialized) {
+                    refreshInterfaces(true, false);
+                }
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+            }
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) {
+            }
+        };
+        comboBoxInside.addPopupMenuListener(interfaceRefreshListener);
+        comboBoxOutside.addPopupMenuListener(interfaceRefreshListener);
+
         comboBoxInside.addMouseListener(buttonMouseListener);
         comboBoxOutside.addMouseListener(buttonMouseListener);
 
@@ -392,65 +405,172 @@ public class MainUI extends JFrame {
         this.setResizable(false);
         //设置虚拟机和界面一同关闭
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        //重新回到程序时刷新网卡信息，避免网卡切换后仍显示上一个网卡的 IP
+        this.addWindowFocusListener(new WindowAdapter() {
+            @Override
+            public void windowGainedFocus(WindowEvent e) {
+                if (initialized) {
+                    refreshInterfaces(true, false);
+                }
+            }
+        });
+
         //设置界面可视化
         this.setVisible(true);
 
         init();
+        initialized = true;
     }
 
 
     public void init() {
-        textAreaResult.setDisabledTextColor(Color.BLACK);
-        this.textAreaResult.setText("加载网卡信息中...");
+        refreshInterfaces(false, true);
+        loadWhiteList();
+    }
+
+    //“更新网卡信息”按钮：重新读取网卡信息，并保留当前已选网卡
+    private void renew() {
+        refreshInterfaces(true, true);
+        loadWhiteList();
+    }
+
+    /**
+     * 重新读取网卡信息并刷新下拉框。
+     *
+     * @param preserveSelection 是否保留当前已选网卡；保留时优先匹配同一张网卡的同一个 IP，
+     *                          IP 变化时仍选中同一张网卡，网卡不存在时才回到第一张网卡
+     * @param announce          是否在结果区显示加载状态
+     */
+    private void refreshInterfaces(boolean preserveSelection, boolean announce) {
+        Interface previousInside = preserveSelection ? getSelectedInterface(comboBoxInside) : null;
+        Interface previousOutside = preserveSelection ? getSelectedInterface(comboBoxOutside) : null;
+
+        if (announce) {
+            textAreaResult.setDisabledTextColor(Color.BLACK);
+            this.textAreaResult.setText("加载网卡信息中...");
+        }
         //接口列表
         interfaceList = InterfaceInfo.getInterfaces(interfaces);
-        if (interfaceList != null) {
-            int size = interfaceList.size();
-
-            if (size == 0) {
-                flag = false;
-                inside = new String[1];
-                outside = new String[1];
-                inside[0] = "没有查询到网络接口";
-                outside[0] = "没有查询到网络接口";
-            } else {
-                //查询到网络接口
-                flag = true;
-                inside = new String[size];
-                outside = new String[size];
-                for (int i = 0; i < interfaceList.size(); i++) {
-                    //准备加载到GUI的数组
-                    inside[i] = interfaceList.get(i).toString();
-                    outside[i] = interfaceList.get(i).toString();
-                }
-                //不作任何选择时的初始值
-                insideIndex = InterfaceUtil.getIndex(inside[0]);
-                outsideIndex = InterfaceUtil.getIndex(outside[0]);
-
-                insideGateway = interfaceList.get(0).getGateway();
-                outsideGateway = interfaceList.get(0).getGateway();
-
-                insideNetmask = interfaceList.get(0).getNetmask();
-                insideNetSegment = InterfaceUtil.getNetSegment(interfaceList.get(0).getIp(), insideNetmask);
+        if (interfaceList == null) {
+            flag = false;
+            if (announce) {
+                textAreaResult.setDisabledTextColor(Color.RED);
+                this.textAreaResult.setText("加载网卡信息失败。");
             }
-            if (this.comboBoxInside != null) {
-                this.comboBoxInside.removeAllItems();
+            return;
+        }
+        int size = interfaceList.size();
+        if (size == 0) {
+            flag = false;
+            inside = new String[1];
+            outside = new String[1];
+            inside[0] = "没有查询到网络接口";
+            outside[0] = "没有查询到网络接口";
+        } else {
+            //查询到网络接口
+            flag = true;
+            inside = new String[size];
+            outside = new String[size];
+            for (int i = 0; i < size; i++) {
+                //准备加载到GUI的数组
+                inside[i] = interfaceList.get(i).toString();
+                outside[i] = interfaceList.get(i).toString();
             }
-            if (this.comboBoxOutside != null) {
-                this.comboBoxOutside.removeAllItems();
+        }
+        if (this.comboBoxInside != null) {
+            this.comboBoxInside.removeAllItems();
+        }
+        if (this.comboBoxOutside != null) {
+            this.comboBoxOutside.removeAllItems();
+        }
+        for (int i = 0; i < inside.length; i++) {
+            assert this.comboBoxInside != null;
+            assert this.comboBoxOutside != null;
+            this.comboBoxInside.addItem(inside[i]);
+            this.comboBoxOutside.addItem(outside[i]);
+        }
+        if (size > 0) {
+            //刷新后恢复原来的网卡选择，避免界面跳回第一张网卡而显示上一个网卡的 IP
+            int insidePosition = findInterfacePosition(previousInside);
+            int outsidePosition = findInterfacePosition(previousOutside);
+            if (insidePosition < 0) {
+                insidePosition = 0;
             }
-            for (int i = 0; i < inside.length; i++) {
-                assert this.comboBoxInside != null;
-                assert this.comboBoxOutside != null;
-                this.comboBoxInside.addItem(inside[i]);
-                this.comboBoxOutside.addItem(outside[i]);
+            if (outsidePosition < 0) {
+                outsidePosition = 0;
             }
+            this.comboBoxInside.setSelectedIndex(insidePosition);
+            this.comboBoxOutside.setSelectedIndex(outsidePosition);
+            //下拉框选中项对应的网关、掩码、网段同步更新
+            applyInsideSelection(interfaceList.get(insidePosition));
+            applyOutsideSelection(interfaceList.get(outsidePosition));
+        }
+        if (announce) {
             textAreaResult.setDisabledTextColor(Color.BLACK);
             this.textAreaResult.setText("加载网卡信息成功。");
-        } else {
-            textAreaResult.setDisabledTextColor(Color.RED);
-            this.textAreaResult.setText("加载网卡信息失败。");
         }
+    }
+
+    private Interface getSelectedInterface(JComboBox<Object> comboBox) {
+        if (interfaceList == null) {
+            return null;
+        }
+        int position = comboBox.getSelectedIndex();
+        if (position < 0 || position >= interfaceList.size()) {
+            return null;
+        }
+        return interfaceList.get(position);
+    }
+
+    private int findInterfacePosition(Interface previous) {
+        if (previous == null || interfaceList == null) {
+            return -1;
+        }
+        //优先保留同一张网卡的同一个 IP
+        for (int i = 0; i < interfaceList.size(); i++) {
+            Interface inf = interfaceList.get(i);
+            if (inf.getIndex() == previous.getIndex()
+                    && Objects.equals(inf.getName(), previous.getName())
+                    && Objects.equals(inf.getIp(), previous.getIp())) {
+                return i;
+            }
+        }
+        //IP 已变化时仍选中同一张网卡，而不是跳回第一张网卡
+        for (int i = 0; i < interfaceList.size(); i++) {
+            Interface inf = interfaceList.get(i);
+            if (inf.getIndex() == previous.getIndex()
+                    && Objects.equals(inf.getName(), previous.getName())) {
+                return i;
+            }
+        }
+        //网卡索引发生变化时，再按网卡名称匹配
+        for (int i = 0; i < interfaceList.size(); i++) {
+            if (Objects.equals(interfaceList.get(i).getName(), previous.getName())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void applyInsideSelection(Interface inf) {
+        if (inf == null) {
+            return;
+        }
+        insideIndex = inf.getIndex();
+        insideGateway = inf.getGateway();
+        insideNetmask = inf.getNetmask();
+        insideNetSegment = InterfaceUtil.getNetSegment(inf.getIp(), insideNetmask);
+    }
+
+    private void applyOutsideSelection(Interface inf) {
+        if (inf == null) {
+            return;
+        }
+        outsideIndex = inf.getIndex();
+        outsideGateway = inf.getGateway();
+    }
+
+    private void loadWhiteList() {
         try {
             String whiteList = ConfigUtil.readWhiteList();
             if (whiteList.length() != 0) {

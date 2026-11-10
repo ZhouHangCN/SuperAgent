@@ -37,10 +37,9 @@ public class InterfaceInfo {
     }
 
     public static List<Interface> getInterfaces(List<Interface> interfaces) {
-        if (!interfaces.isEmpty()) {
-            interfaces.clear();
-            interfacesInfo = initInterFaceInfo();
-        }
+        //每次刷新都重新执行系统命令，保证网关、掩码等解析结果与当前网卡一致
+        interfaces.clear();
+        interfacesInfo = initInterFaceInfo();
         try {
             Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
             while (networkInterfaces.hasMoreElements()) {
