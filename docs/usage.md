@@ -4,21 +4,59 @@ Network Route Tool 面向同时连接内网和外网的双网卡环境：让内�
 
 ## 安装
 
-### 运行环境
+### 前置条件
 
-- 操作系统：Windows 或 macOS，中文或英文环境均可。
-- 运行环境：需要安装 JRE 或 JDK，建议使用 Java 8 及以上版本。
+- 操作系统：Windows 或 macOS，中文或英文环境均可；Linux 暂不支持。
+- Java：Java 8 及以上。只运行现成的可执行程序需要 JRE；从源码构建需要 JDK（含 `javac`）。
+- 依赖：从源码构建需要 log4j 1.2.x（本文示例使用 1.2.17），仓库不包含该 jar，需要自行下载。
+- 权限：修改系统路由需要管理员权限。Windows 以管理员身份运行；macOS 用 `sudo` 启动。
+- 网络：至少两张已启用的网卡（一内一外），且都能获取到非 `0.0.0.0` 的默认网关。
+- 白名单（可选）：准备 `WhiteList.config`，放在启动程序时的工作目录。
 
-### 安装与启动
+### 获取程序
 
-1. 从项目的 Releases 页面下载最新版本的程序包并解压；如果当前仓库暂无发布包，可使用上游项目 NetworkRouteTool 的发布版本。
-2. 如果下载到的是可执行程序，直接运行即可；如果下载到的是 jar 包，请确保本机已安装 JRE，然后启动：
-   - Windows（管理员命令提示符）：`java -jar <程序包名>.jar`
-   - macOS（终端）：`sudo java -jar <程序包名>.jar`
-3. 修改系统路由需要管理员权限：
-   - Windows：右键程序并选择“以管理员身份运行”。
-   - macOS：建议在终端中使用 `sudo` 启动，以便程序执行 `route` 命令。
-4. 程序启动后会自动加载网卡信息，并显示在结果区；如果信息不正确，可以点击“更新网卡信息”重新读取。
+- **Windows**：本仓库暂无发布包，可从上游项目 NetworkRouteTool 的 Releases 下载 v1.2–v1.4 的 exe，解压后直接运行；上游未提供 jar 包。
+- **macOS 或需要使用本仓库源码**：按下面的“从源码构建并运行”操作。
+
+### 从源码构建并运行
+
+先进入 `SuperAgent/SuperAgentTest` 目录再执行：
+
+```bash
+# 1. 下载依赖（仓库不包含 log4j）
+mkdir -p lib build/classes
+curl -fL -o lib/log4j-1.2.17.jar \
+  https://repo1.maven.org/maven2/log4j/log4j/1.2.17/log4j-1.2.17.jar
+
+# 2. 编译（需要 JDK 8+）
+javac -encoding UTF-8 -cp lib/log4j-1.2.17.jar \
+  -d build/classes $(find src/main/java -name '*.java')
+
+# 3. 加入日志配置
+cp src/main/resources/log4j.properties build/classes/
+
+# 4. 以管理员权限启动（macOS 必须用 sudo）
+sudo java -cp "build/classes:lib/log4j-1.2.17.jar" com.zh.Run
+```
+
+Windows 请在“以管理员身份运行”的命令提示符中执行：
+
+```bat
+mkdir lib build\classes
+curl -fL -o lib\log4j-1.2.17.jar https://repo1.maven.org/maven2/log4j/log4j/1.2.17/log4j-1.2.17.jar
+dir /s /b src\main\java\*.java > sources.txt
+javac -encoding UTF-8 -cp lib\log4j-1.2.17.jar -d build\classes @sources.txt
+copy src\main\resources\log4j.properties build\classes\
+java -cp "build\classes;lib\log4j-1.2.17.jar" com.zh.Run
+```
+
+Windows 命令提示符的 classpath 分隔符是 `;`，macOS 是 `:`，不要混用。没有 `curl` 时可用浏览器打开依赖链接下载。
+
+### 启动后的检查
+
+1. 程序启动后会自动加载网卡信息，并显示在结果区；如果信息不正确，可以点击“更新网卡信息”重新读取。
+2. 确认内网、外网下拉框中选的是两张不同网卡，且两个网关都不是 `0.0.0.0`。
+3. 白名单和日志都相对于启动程序时的工作目录；从其他目录启动时，请把 `WhiteList.config` 放到该目录。
 
 ## 配置
 

@@ -1,4 +1,65 @@
-### Update
+# Network Route Tool
+
+双网卡路由设置工具：内网流量走内网网卡，外网流量走外网网卡，不用来回切换网络。完整的使用说明见 [docs/usage.md](../../docs/usage.md)。
+
+## 快速开始
+
+### 前置条件
+
+- **操作系统**：Windows 或 macOS，中文或英文环境均可；Linux 暂不支持。
+- **Java**：Java 8 及以上。只运行发布包需要 JRE；从源码构建需要 JDK（含 `javac`）。
+- **依赖**：仓库未包含 log4j，从源码构建前需要准备 `log4j-1.2.x.jar`（示例使用 1.2.17）。
+- **权限**：修改路由需要管理员权限。Windows 请以管理员身份启动命令行；macOS 请用 `sudo` 启动。
+- **网卡**：至少两张已启用的网卡（一内一外），并且都能获取到非 `0.0.0.0` 的默认网关。
+- **白名单（可选）**：`WhiteList.config` 放在启动程序时的工作目录（不是 jar 所在目录），每行一条 `IP 子网掩码`，以 `#` 开头的行是注释。
+
+### 从源码构建并运行（示例）
+
+在仓库根目录执行：
+
+**macOS**
+
+```bash
+cd SuperAgent/SuperAgentTest
+
+# 1. 下载依赖（仓库不包含 log4j）
+mkdir -p lib build/classes
+curl -fL -o lib/log4j-1.2.17.jar \
+  https://repo1.maven.org/maven2/log4j/log4j/1.2.17/log4j-1.2.17.jar
+
+# 2. 编译（需要 JDK 8+）
+javac -encoding UTF-8 -cp lib/log4j-1.2.17.jar \
+  -d build/classes $(find src/main/java -name '*.java')
+
+# 3. 加入日志配置
+cp src/main/resources/log4j.properties build/classes/
+
+# 4. 以管理员权限启动（macOS 必须用 sudo）
+sudo java -cp "build/classes:lib/log4j-1.2.17.jar" com.zh.Run
+```
+
+**Windows（以管理员身份打开命令提示符）**
+
+```bat
+cd SuperAgent\SuperAgentTest
+mkdir lib build\classes
+curl -fL -o lib\log4j-1.2.17.jar https://repo1.maven.org/maven2/log4j/log4j/1.2.17/log4j-1.2.17.jar
+dir /s /b src\main\java\*.java > sources.txt
+javac -encoding UTF-8 -cp lib\log4j-1.2.17.jar -d build\classes @sources.txt
+copy src\main\resources\log4j.properties build\classes\
+java -cp "build\classes;lib\log4j-1.2.17.jar" com.zh.Run
+```
+
+> 仓库中没有发布包；上游 NetworkRouteTool 的 Releases 只提供 Windows exe（v1.2–v1.4）。macOS 或需要使用本仓库源码时，请按上面的步骤从源码构建。没有 `curl` 时，可用浏览器打开依赖链接下载。
+
+启动后按以下顺序操作：
+
+1. 在内网、外网下拉框中各选一张网卡，确认两个网关都不是 `0.0.0.0`。
+2. 如需白名单，在“内网白名单”文本框中按 `IP 子网掩码` 填写并点击“保存白名单”；不需要可留空。
+3. 点击“执行路由”。路由命令需要管理员权限，权限不足时结果区会给出提示。
+4. 需要恢复路由时，拔插对应网线或重启系统。
+
+## 更新记录
 
 #### v1.5
 
@@ -50,11 +111,11 @@
 
 
 
-### F&Q
+## 常见问题
 
 #### 	软件运行环境？
 
-​			本软件支持在Windows/MAC OS操作系统运行，中文或英文环境下使用，需jre或jdk支持。
+​			本软件支持在Windows/MAC OS操作系统运行，中文或英文环境下使用，需jre或jdk支持；从源码构建时需要 JDK 8 及以上版本和 log4j 1.2.x。
 
 
 
@@ -88,7 +149,7 @@
 
 ​		配置文件命名：WhiteList.config。
 
-​		文件存放位置：与软件同级目录即可检测。
+​		文件存放位置：启动程序时的工作目录（不是 jar 所在目录），可在该目录新建或编辑。
 
 ​		如何打开：文本编辑器即可直接打开编辑。
 
@@ -96,6 +157,6 @@
 
 
 
-### 反馈
+## 反馈
 
 如遇到其他BUG或问题，欢迎将问题描述和软件工具下存放路径下的info.log邮箱至zhouh1105@163.com进行反馈。
