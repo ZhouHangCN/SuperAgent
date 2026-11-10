@@ -106,6 +106,10 @@ public class ConfigUtil {
                 }
                 String commentContent = oldIPInfo.substring(1).trim();
                 if (InterfaceUtil.isIPInfo(commentContent)) {
+                    //该条目已重新加入输入框，不再作为已删除记录保留，避免保存后仍停留在最前面造成重复和顺序错乱
+                    if (newIPList.contains(commentContent)) {
+                        continue;
+                    }
                     //之前保存时注释掉的已删除记录，继续保留在最前面
                     String removedIPInfo = "#" + commentContent;
                     if (!removedIPList.contains(removedIPInfo)) {
